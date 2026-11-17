@@ -1,7 +1,11 @@
 import "dotenv/config";
+import fs from "node:fs";
+import path from "node:path";
+import { createServer } from "node:http";
 
 import {
   Client,
+  AttachmentBuilder,
   GatewayIntentBits,
   Events,
   EmbedBuilder,
@@ -41,6 +45,8 @@ import {
   sleepMascot,
   resetMascot
 } from "./services/mascotService";
+
+import { handleMusicCommand } from "./services/musicService";
 
 const token = process.env.DISCORD_TOKEN;
 
@@ -237,19 +243,14 @@ client.on(Events.InteractionCreate, async interaction => {
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName === "limpar") {
       try {
+        await interaction.deferReply({ ephemeral: true });
         if (!interaction.guild) {
-          await interaction.reply({
-            content: "Este comando so pode ser usado dentro de um servidor.",
-            ephemeral: true
-          });
+          await interaction.editReply({ content: "Este comando so pode ser usado dentro de um servidor." });
           return;
         }
 
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
-          await interaction.reply({
-            content: "Voce precisa da permissao Gerenciar mensagens para usar este comando.",
-            ephemeral: true
-          });
+          await interaction.editReply({ content: "Voce precisa da permissao Gerenciar mensagens para usar este comando." });
           return;
         }
 
@@ -264,14 +265,10 @@ client.on(Events.InteractionCreate, async interaction => {
         const botPermissions = targetChannel.permissionsFor(botMember);
 
         if (!botPermissions?.has(PermissionFlagsBits.ManageMessages)) {
-          await interaction.reply({
-            content: "Nao tenho permissao para gerenciar mensagens nesse canal.",
-            ephemeral: true
-          });
+          await interaction.editReply({ content: "Nao tenho permissao para gerenciar mensagens nesse canal." });
           return;
         }
 
-        await interaction.deferReply({ ephemeral: true });
 
         const deletedMessages = await targetChannel.bulkDelete(amount, true);
         const deletedCount = deletedMessages.size;
@@ -310,23 +307,17 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (interaction.commandName === "configurar") {
       try {
+        await interaction.deferReply({ ephemeral: true });
         if (!interaction.guildId) {
-          await interaction.reply({
-            content: "Este comando só pode ser usado dentro de um servidor.",
-            ephemeral: true
-          });
+          await interaction.editReply({ content: "Este comando só pode ser usado dentro de um servidor." });
           return;
         }
 
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-          await interaction.reply({
-            content: "Você não tem permissão para configurar o bot.",
-            ephemeral: true
-          });
+          await interaction.editReply({ content: "Você não tem permissão para configurar o bot." });
           return;
         }
 
-        await interaction.deferReply({ ephemeral: true });
 
         const event = interaction.options.getString("evento", true) as LogEvent;
         const channel = interaction.options.getChannel("canal", true);
@@ -361,18 +352,12 @@ client.on(Events.InteractionCreate, async interaction => {
         await interaction.deferReply({ ephemeral: true });
 
         if (!interaction.guildId) {
-          await interaction.reply({
-            content: "Este comando só pode ser usado dentro de um servidor.",
-            ephemeral: true
-          });
+          await interaction.editReply({ content: "Este comando só pode ser usado dentro de um servidor." });
           return;
         }
 
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-          await interaction.reply({
-            content: "Você precisa da permissão Gerenciar servidor para publicar o painel.",
-            ephemeral: true
-          });
+          await interaction.editReply({ content: "Você precisa da permissão Gerenciar servidor para publicar o painel." });
           return;
         }
 
@@ -499,6 +484,175 @@ client.on(Events.InteractionCreate, async interaction => {
 
       return;
     }
+    if (interaction.commandName === "publicar-regras") {
+      try {
+        await interaction.deferReply({ ephemeral: true });
+
+        if (!interaction.guild) {
+          await interaction.editReply({
+            content: "Este comando só pode ser usado dentro de um servidor."
+          });
+          return;
+        }
+
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          await interaction.editReply({
+            content: "Você precisa da permissão Gerenciar servidor para publicar as regras."
+          });
+          return;
+        }
+
+        const selectedChannel = interaction.options.getChannel("canal", true);
+
+        if (selectedChannel.type !== 0) {
+          await interaction.editReply({
+            content: "Selecione um canal de texto válido."
+          });
+          return;
+        }
+
+        const channel = await interaction.guild.channels.fetch(selectedChannel.id);
+
+        if (!channel || channel.type !== 0) {
+          await interaction.editReply({
+            content: "Não foi possível acessar esse canal."
+          });
+          return;
+        }
+
+        const botMember = await interaction.guild.members.fetchMe();
+        const permissions = channel.permissionsFor(botMember);
+
+        if (
+          !permissions?.has(PermissionFlagsBits.ViewChannel) ||
+          !permissions?.has(PermissionFlagsBits.SendMessages) ||
+          !permissions?.has(PermissionFlagsBits.EmbedLinks)
+        ) {
+          await interaction.editReply({
+            content: "Preciso das permissões Ver canal, Enviar mensagens e Incorporar links no canal escolhido."
+          });
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor("#8B5CF6")
+          .setAuthor({ name: "LUAR COMMUNITY" })
+          .setTitle("🌙 Código de convivência do Luar")
+          .setDescription(
+            [
+              "Seja bem-vindo ao Luar! Nosso servidor é um espaço para fazer amizades, conversar, jogar e compartilhar momentos.",
+              "",
+              "Para manter uma comunidade segura, acolhedora e organizada, todos os membros devem respeitar as regras abaixo.",
+              "",
+              "✨ **Ao permanecer no servidor, você concorda com este regulamento.**"
+            ].join("\n")
+          )
+          .addFields(
+            {
+              name: "01 · Respeito e convivência",
+              value: [
+                "• Respeite todos os membros, independentemente de suas diferenças.",
+                "• Não são permitidos racismo, homofobia, machismo, xenofobia ou discriminação.",
+                "• Não pratique assédio, perseguição, ameaças ou intimidação.",
+                "• Evite provocações e discussões ofensivas."
+              ].join("\n")
+            },
+            {
+              name: "02 · Comunicação",
+              value: [
+                "• Não faça spam, flood ou envio excessivo de mensagens.",
+                "• Evite marcar membros e cargos repetidamente sem necessidade.",
+                "• Não envie conteúdos perturbadores, explícitos ou inadequados.",
+                "• Utilize os canais conforme suas respectivas finalidades."
+              ].join("\n")
+            },
+            {
+              name: "03 · Privacidade e segurança",
+              value: [
+                "• Não divulgue dados pessoais seus ou de terceiros sem autorização.",
+                "• Não compartilhe conversas, imagens ou informações privadas sem consentimento.",
+                "• Não envie links suspeitos, arquivos maliciosos ou tentativas de golpe.",
+                "• Nunca solicite senhas ou códigos de acesso."
+              ].join("\n")
+            },
+            {
+              name: "04 · Canais de voz",
+              value: [
+                "• Respeite todos os participantes das conversas.",
+                "• Não utilize sons ou microfones para atrapalhar os demais.",
+                "• Evite gritos, ruídos excessivos e interrupções constantes.",
+                "• Não grave conversas sem o consentimento dos participantes."
+              ].join("\n")
+            },
+            {
+              name: "05 · Divulgação e publicidade",
+              value: [
+                "• Não divulgue servidores, redes sociais, lojas ou serviços sem autorização da equipe.",
+                "• Não envie publicidade em canais inadequados.",
+                "• Não utilize mensagens privadas para fazer propaganda indesejada."
+              ].join("\n")
+            },
+            {
+              name: "06 · Conteúdo e comportamento",
+              value: [
+                "• Respeite as diretrizes do Discord e as leis aplicáveis.",
+                "• Não compartilhe conteúdo ilegal ou que coloque pessoas em risco.",
+                "• Não incentive comportamentos perigosos ou prejudiciais.",
+                "• Respeite os limites e o conforto dos demais membros."
+              ].join("\n")
+            },
+            {
+              name: "07 · Organização e equipe",
+              value: [
+                "• Respeite as orientações da equipe de moderação.",
+                "• Não abuse de comandos, bots ou permissões.",
+                "• Não tente explorar falhas ou prejudicar o servidor.",
+                "• Encaminhe problemas e denúncias à equipe responsável."
+              ].join("\n")
+            },
+            {
+              name: "08 · Penalidades",
+              value: [
+                "• Infrações podem resultar em advertência, silenciamento, expulsão ou banimento.",
+                "• A reincidência poderá aumentar a penalidade.",
+                "• Infrações graves podem resultar em banimento imediato.",
+                "• A equipe avaliará cada situação considerando seu contexto e gravidade."
+              ].join("\n")
+            },
+            {
+              name: "🌙 Nosso compromisso",
+              value: "O Luar é uma comunidade construída por pessoas. Queremos que todos possam se sentir seguros, respeitados e livres para aproveitar esse espaço.\n\n**Com carinho, equipe Luar.**"
+            }
+          )
+          .setFooter({ text: "LUAR COMMUNITY • Respeito, amizade e boas conexões." })
+          .setTimestamp();
+
+        await channel.send({ embeds: [embed] });
+
+        await interaction.editReply({
+          content: `🌙 Regras do Luar publicadas com sucesso em ${channel}.`
+        });
+
+        console.log(`[REGRAS] Publicadas por ${interaction.user.tag} em #${channel.name}.`);
+      } catch (error) {
+        console.error("[PUBLICAR REGRAS] Erro:", error);
+
+        const response = {
+          content: "Não foi possível publicar as regras. Confira as permissões do bot no canal."
+        };
+
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply(response).catch(console.error);
+        } else {
+          await interaction.reply({
+            ...response,
+            ephemeral: true
+          }).catch(console.error);
+        }
+      }
+
+      return;
+    }
     if (interaction.commandName === "registro") {
       try {
         if (!interaction.guildId) {
@@ -565,6 +719,52 @@ client.on(Events.InteractionCreate, async interaction => {
         const userId = interaction.user.id;
         const command = interaction.commandName;
 
+
+const getMascotImageName = (
+  mascot: NonNullable<ReturnType<typeof getMascot>>
+): string => {
+  const normalizedName = mascot.name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const images: Record<string, string> = {
+    luninho: "luninho.png",
+    estrelinha: "estrelinha.png",
+    nebula: "nebula.png",
+    astro: "astro.png",
+    celeste: "celeste.png",
+    eclipse: "eclipse.png"
+  };
+
+  const filename = images[normalizedName];
+
+  if (!filename) {
+    throw new Error(`Imagem não cadastrada para ${mascot.name}.`);
+  }
+
+  return filename;
+};
+
+const createMascotImage = (
+  mascot: NonNullable<ReturnType<typeof getMascot>>
+): AttachmentBuilder => {
+  const filename = getMascotImageName(mascot);
+  const imagePath = path.join(
+    process.cwd(),
+    "assets",
+    "mascotes",
+    filename
+  );
+
+  if (!fs.existsSync(imagePath)) {
+    throw new Error(`Imagem não encontrada: ${imagePath}`);
+  }
+
+  return new AttachmentBuilder(imagePath, {
+    name: filename
+  });
+};
         const rarityColors: Record<string, number> = {
           "Comum": 0xA3A3A3,
           "Incomum": 0x22C55E,
@@ -578,6 +778,7 @@ client.on(Events.InteractionCreate, async interaction => {
           if (!mascot) return null;
 
           const progress = mascot.experience % 100;
+          const imageName = getMascotImageName(mascot);
 
           return new EmbedBuilder()
             .setColor(rarityColors[mascot.rarity] ?? 0x8B5CF6)
@@ -630,6 +831,7 @@ client.on(Events.InteractionCreate, async interaction => {
             .setFooter({
               text: "Santaninha.bot • Cuide bem do seu companheiro lunar"
             })
+            .setImage(`attachment://${imageName}`)
             .setTimestamp();
         };
 
@@ -646,7 +848,8 @@ client.on(Events.InteractionCreate, async interaction => {
           );
 
           await interaction.editReply({
-            embeds: [embed]
+            embeds: [embed],
+            files: [createMascotImage(mascot)]
           });
 
           console.log(
@@ -666,7 +869,8 @@ client.on(Events.InteractionCreate, async interaction => {
           }
 
           await interaction.editReply({
-            embeds: [createMascotEmbed(mascot)!]
+            embeds: [createMascotEmbed(mascot)!],
+            files: [createMascotImage(mascot)]
           });
           return;
         }
@@ -687,7 +891,8 @@ client.on(Events.InteractionCreate, async interaction => {
             );
 
           await interaction.editReply({
-            embeds: [embed]
+            embeds: [embed],
+            files: [createMascotImage(mascot)]
           });
 
           console.log(
@@ -705,7 +910,8 @@ client.on(Events.InteractionCreate, async interaction => {
           );
 
           await interaction.editReply({
-            embeds: [embed]
+            embeds: [embed],
+            files: [createMascotImage(mascot)]
           });
           return;
         }
@@ -720,7 +926,8 @@ client.on(Events.InteractionCreate, async interaction => {
           );
 
           await interaction.editReply({
-            embeds: [embed]
+            embeds: [embed],
+            files: [createMascotImage(mascot)]
           });
           return;
         }
@@ -735,7 +942,8 @@ client.on(Events.InteractionCreate, async interaction => {
           );
 
           await interaction.editReply({
-            embeds: [embed]
+            embeds: [embed],
+            files: [createMascotImage(mascot)]
           });
           return;
         }
@@ -1285,6 +1493,8 @@ client.on(Events.MessageCreate, async message => {
       }
     }
 
+    if (await handleMusicCommand(message)) return;
+
     const details = describeMessage(message);
 
     const embed = new EmbedBuilder()
@@ -1431,6 +1641,38 @@ client.on(Events.MessageDelete, async message => {
 });
 
 // CONEXÃO COM O DISCORD
+
+
+// SERVIDOR HTTP PARA O RENDER
+const healthPort = Number(process.env.PORT || 10000);
+
+const healthServer = createServer((request, response) => {
+  if (request.method !== "GET") {
+    response.writeHead(405);
+    response.end();
+    return;
+  }
+
+  if (request.url !== "/" && request.url !== "/health") {
+    response.writeHead(404);
+    response.end();
+    return;
+  }
+
+  response.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8"
+  });
+
+  response.end(JSON.stringify({
+    status: "ok",
+    service: "santaninha-bot",
+    discordReady: client.isReady()
+  }));
+});
+
+healthServer.listen(healthPort, "0.0.0.0", () => {
+  console.log(`[HTTP] Servidor ativo na porta ${healthPort}.`);
+});
 
 client.login(token).catch(error => {
   console.error("[LOGIN] Erro ao conectar o bot:", error);

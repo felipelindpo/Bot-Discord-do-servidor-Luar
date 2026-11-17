@@ -62,6 +62,17 @@ const publicarRegistroCommand = new SlashCommandBuilder()
       .setRequired(true)
   );
 
+const publicarRegrasCommand = new SlashCommandBuilder()
+  .setName("publicar-regras")
+  .setDescription("Publica as regras oficiais da comunidade Luar")
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addChannelOption(option =>
+    option
+      .setName("canal")
+      .setDescription("Canal onde as regras serão publicadas")
+      .addChannelTypes(ChannelType.GuildText)
+      .setRequired(true)
+  );
 const limparCommand = new SlashCommandBuilder()
   .setName("limpar")
   .setDescription("Apaga mensagens de um canal escolhido")
@@ -119,6 +130,7 @@ async function deploy() {
         configurarCommand.toJSON(),
         registroCommand.toJSON(),
         publicarRegistroCommand.toJSON(),
+        publicarRegrasCommand.toJSON(),
         limparCommand.toJSON(),
         adotarCommand.toJSON(),
         mascoteCommand.toJSON(),
